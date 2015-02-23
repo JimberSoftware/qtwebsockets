@@ -116,6 +116,9 @@ QWebSocketPrivate::QWebSocketPrivate(const QString &origin, QWebSocketProtocol::
     m_defaultMaskGenerator(),
     m_handshakeState(NothingDoneState)
 {
+     if (m_mustMask) //client
+         m_extension = QLatin1Literal("permessage-deflate; client_no_context_takeover; "
+                                      "client_max_window_bits");
 }
 
 /*!

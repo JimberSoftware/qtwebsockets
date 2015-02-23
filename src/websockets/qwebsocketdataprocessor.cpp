@@ -246,6 +246,7 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                 }
 
                 if (frame.isFinalFrame()) {
+                    isDone = true;
                     if (m_isExt && m_currentExt) {
                         if (m_currentExt->name() == QLatin1Literal("permessage-deflate")) {
                             // todo
@@ -278,10 +279,12 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                                                              tr("Invalid UTF-8 code encountered."));
                                      return;
                                  } else {
-                                    Q_EMIT textMessageReceived(m_textMessage);
+                                     Q_EMIT textMessageReceived(m_textMessage);
+                                     clear();
                                  }
                             } else {
                                 Q_EMIT binaryMessageReceived(m_binaryMessage);
+                                clear();
                             }
                         }
                     } else {
@@ -289,8 +292,8 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                             Q_EMIT textMessageReceived(m_textMessage);
                         else
                             Q_EMIT binaryMessageReceived(m_binaryMessage);
+                        clear();
                     }
-                    clear();
                 }
             }
         } else {
