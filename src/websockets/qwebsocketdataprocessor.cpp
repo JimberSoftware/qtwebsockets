@@ -128,6 +128,10 @@ QByteArray QWebSocketDataProcessor::compress(const QByteArray &input)
         if (capabilities.testFlag(QWebSocketExtension::Compress)) {
             QByteArray output;
             bool result = extension->serverJob(input, output);
+#ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
+            qDebug() << "Compress:" << output.length()
+                     << ", data:" << output.toHex();
+#endif
             if (!result)
                 return QByteArray();
             if (extension->name() == QLatin1Literal("permessage-deflate")) {
@@ -176,6 +180,12 @@ void QWebSocketDataProcessor::loadExtensions(const QString &extensions)
             }
         }
     }
+}
+
+QStringList QWebSocketDataProcessor::availableExtensions()
+{
+    static auto keys = QWebSocketExtensionFactory::keys();
+    return keys;
 }
 
 /*!
@@ -273,14 +283,14 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                     isDone = true;
                     if (m_isExtension && m_currentExtension) {
                         if (m_currentExtension->name() == QLatin1Literal("permessage-deflate")) {
+#ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
+                            qDebug() << "Decompress: before:" << m_cache.length()
+                                     << ", data:" << m_cache.toHex();
+#endif
                             const QByteArray ba("\0\0\xff\xff", 4);
                             m_cache.append(ba);
-#ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
-                            qDebug() << "Decompress: before:" << m_cache.length() << ", data:"
-                                     << m_cache.toHex();
-#endif
-                            m_binaryMessage.clear();
-                            if (!m_currentExtension->clientJob(m_cache, m_binaryMessage)) {
+                            QByteArray buffer;
+                            if (!m_currentExtension->clientJob(m_cache, buffer)) {
                                 auto format = QStringLiteral("QWebSocketDataProcessor: %1: "
                                                              "Client job error");
                                 clear();
@@ -289,27 +299,18 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                                                         errorText);
                             }
 #ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
-                            qDebug() << "Decompress: after:" << m_binaryMessage.length()
-                                     << ", data:" << m_binaryMessage.toHex();
+                            qDebug() << "Decompress: after:" << buffer.length()
+                                     << ", data:" << buffer.toHex();
 #endif
-
-                            if (m_opCodeBackup == QWebSocketProtocol::OpCodeText) {
-                                m_textMessage = m_pTextCodec->toUnicode(m_binaryMessage.constData(),
-                                                                        m_binaryMessage.size(),
-                                                                        m_pConverterState);
-                                bool failed = (m_pConverterState->invalidChars != 0)
-                                        || (m_pConverterState->remainingChars != 0);
-                                if (Q_UNLIKELY(failed)) {
-                                    clear();
-                                    Q_EMIT errorEncountered(
-                                                QWebSocketProtocol::CloseCodeWrongDatatype,
-                                                tr("Invalid UTF-8 code encountered."));
-                                    return;
-                                } else {
-                                    Q_EMIT textMessageReceived(m_textMessage);
-                                 }
+                            m_currentExtension->clientJob(m_cache, m_binaryMessage);
+                            if (m_opCode == QWebSocketProtocol::OpCodeText) {
+                                const QString textMessage = QString::fromUtf8(buffer);
+                                clear();
+                                Q_EMIT textMessageReceived(textMessage);
                             } else {
-                                Q_EMIT binaryMessageReceived(m_binaryMessage);
+                                const QByteArray binaryMessage(buffer);
+                                clear();
+                                Q_EMIT binaryMessageReceived(binaryMessage);
                             }
                         }
                     } else {
@@ -323,7 +324,6 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                             Q_EMIT binaryMessageReceived(binaryMessage);
                         }
                     }
-                    clear();
                 }
             }
         } else {

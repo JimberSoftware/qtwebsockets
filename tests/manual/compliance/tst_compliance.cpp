@@ -92,9 +92,11 @@ void tst_ComplianceTest::runTestCase(int nbr, int total)
     //ws://ipaddress:port/runCase?case=<number>&agent=<agentname>
     //where agent name will be QWebSocket
     QObject::connect(pWebSocket, &QWebSocket::textMessageReceived, [=](QString message) {
+        qDebug() << "TextMessage received: " << message;
         pWebSocket->sendTextMessage(message);
     });
     QObject::connect(pWebSocket, &QWebSocket::binaryMessageReceived, [=](QByteArray message) {
+        qDebug() << "BinaryMessage received: " << message;
         pWebSocket->sendBinaryMessage(message);
     });
 
@@ -128,9 +130,13 @@ void tst_ComplianceTest::autobahnTest()
     QObject::connect(pWebSocket, &QWebSocket::textMessageReceived, [&](QString message) {
         numberOfTestCases = message.toInt();
     });
+    QObject::connect(pWebSocket, &QWebSocket::connected, [&]() {
+        qDebug() << "connected";
+    });
 
     url.setPath(QStringLiteral("/getCaseCount"));
     pWebSocket->open(url);
+    qDebug() << pWebSocket->state();
     spy.wait(60000);
     QVERIFY(numberOfTestCases > 0);
 

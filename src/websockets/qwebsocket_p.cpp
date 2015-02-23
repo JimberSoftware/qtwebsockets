@@ -116,6 +116,8 @@ QWebSocketPrivate::QWebSocketPrivate(const QString &origin, QWebSocketProtocol::
     m_defaultMaskGenerator(),
     m_handshakeState(NothingDoneState)
 {
+    m_extension = QLatin1Literal("permessage-deflate; client_no_context_takeover; "
+                                 "client_max_window_bits");
 }
 
 /*!
@@ -149,6 +151,8 @@ QWebSocketPrivate::QWebSocketPrivate(QTcpSocket *pTcpSocket, QWebSocketProtocol:
     m_defaultMaskGenerator(),
     m_handshakeState(NothingDoneState)
 {
+    m_extension = QLatin1Literal("permessage-deflate; client_no_context_takeover; "
+                                 "client_max_window_bits");
 }
 
 /*!
@@ -767,6 +771,10 @@ qint64 QWebSocketPrivate::doWriteFrames(const QByteArray &data, bool isBinary)
                 QWebSocketProtocol::OpCodeBinary : QWebSocketProtocol::OpCodeText;
 
     QByteArray tmpData = m_dataProcessor.compress(data);
+#ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
+    qDebug() << "Compress: after:" << tmpData.length()
+             << ", data:" << tmpData.toHex();
+#endif
     const bool compressed = tmpData != data;
 
     quint64 numFrames = tmpData.size() / FRAME_SIZE_IN_BYTES;
@@ -1104,7 +1112,7 @@ void QWebSocketPrivate::processStateChanged(QAbstractSocket::SocketState socketS
                                                 % QStringLiteral(":")
                                                 % QString::number(m_request.url().port(port)),
                                            origin(),
-                                           QString(),
+                                           m_extension,
                                            QString(),
                                            m_key,
                                            headers);

@@ -78,6 +78,8 @@ public:
     QByteArray compress(const QByteArray &input);
     void loadExtensions(const QString &extensions);
 
+    static QStringList availableExtensions();
+
 Q_SIGNALS:
     void pingReceived(const QByteArray &data);
     void pongReceived(const QByteArray &data);
