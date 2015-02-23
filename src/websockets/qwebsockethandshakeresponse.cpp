@@ -151,8 +151,13 @@ QString QWebSocketHandshakeResponse::getHandshakeResponse(
                     supportedProtocols.toSet().intersect(request.protocols().toSet()).toList();
             //TODO: extensions must be kept in the order in which they arrive
             //cannot use set.intersect() to get the supported extensions
+            QSet<QString> extensionKeys;
+            for (const auto &extension : request.extensions()) {
+                const auto idx = extension.indexOf(QLatin1Char(';'));
+                extensionKeys.insert(extension.left(idx).trimmed());
+            }
             const QList<QString> matchingExtensions =
-                    supportedExtensions.toSet().intersect(request.extensions().toSet()).toList();
+                    supportedExtensions.toSet().intersect(extensionKeys).toList();
             QList<QWebSocketProtocol::Version> matchingVersions =
                     request.versions().toSet().intersect(supportedVersions.toSet()).toList();
             std::sort(matchingVersions.begin(), matchingVersions.end(),

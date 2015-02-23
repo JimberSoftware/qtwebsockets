@@ -104,7 +104,7 @@ private:
 
     bool m_isFinalFrame;
     bool m_isFragmented;
-    bool m_isExt;
+    bool m_isExtension;
     QWebSocketProtocol::OpCode m_opCode;
     QWebSocketProtocol::OpCode m_opCodeBackup;
     bool m_isControlFrame;
@@ -119,8 +119,8 @@ private:
     QTextCodec *m_pTextCodec;
 
 public:
-    QList<QWebSocketExtension *> m_exts;
-    QWebSocketExtension *m_currentExt;
+    QList<QWebSocketExtension *> m_extensions;
+    QWebSocketExtension *m_currentExtension;
 
 private:
     bool processControlFrame(const QWebSocketFrame &frame);

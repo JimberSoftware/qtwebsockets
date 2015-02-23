@@ -3,7 +3,7 @@
 ** Copyright (C) 2017 The Qt Company Ltd.
 ** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the QtWebSockets module of the Qt Toolkit.
+** This file is part of the plugins of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
@@ -31,45 +31,21 @@
 **
 ****************************************************************************/
 
-#ifndef QWEBSOCKETEXTENSION_H
-#define QWEBSOCKETEXTENSION_H
+#include "main.h"
 
-#include <QtCore/qglobal.h>
-#include <QtCore/qlist.h>
+#ifndef QT_NO_WEBSOCKETEXTENSIONPLUGIN
 
-#include "qwebsockets_global.h"
+#include "qwebsocketpmcdeflateextenstion_p.h"
 
 QT_BEGIN_NAMESPACE
 
-class Q_WEBSOCKETS_EXPORT QWebSocketExtension
+QWebSocketExtension *QPermessageDeflatePlugin::create(const QString &key) const
 {
-public:
-    QWebSocketExtension();
-    virtual ~QWebSocketExtension();
-
-    virtual bool isEnabled();
-    virtual void setEnabled(bool enabled);
-
-    virtual void init() = 0;
-    virtual void destroy() = 0;
-
-    virtual void decompress(const QByteArray &input, QByteArray &output) = 0;
-    virtual void compress(const QByteArray &input, QByteArray &output) = 0;
-
-    virtual QString name() const;
-
-    virtual QString offer() const;
-    virtual bool acceptable(bool rsv1, bool rsv2, bool rsv3) const;
-    virtual bool canCompress() const;
-    virtual void setOptions(const QString &input);
-    virtual bool validate(const QString &input) const;
-    virtual bool negotiate(const QString &input, QString &output) const;
-    virtual QString response() const;
-
-private:
-    Q_DISABLE_COPY(QWebSocketExtension)
-};
+    if (key.toLower() == "permessage-deflate")
+        return new QWebSocketPerMessageDeflateExt;
+    return nullptr;
+}
 
 QT_END_NAMESPACE
 
-#endif // QWEBSOCKETEXTENSION_H
+#endif // QT_NO_WEBSOCKETEXTENSIONPLUGIN

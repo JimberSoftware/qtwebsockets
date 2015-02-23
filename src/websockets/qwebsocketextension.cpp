@@ -48,8 +48,9 @@ bool QWebSocketExtension::isEnabled()
     return false;
 }
 
-void QWebSocketExtension::setEnabled(bool /*e*/)
+void QWebSocketExtension::setEnabled(bool enabled)
 {
+    Q_UNUSED(enabled);
 }
 
 QString QWebSocketExtension::name() const
@@ -62,8 +63,11 @@ QString QWebSocketExtension::offer() const
     return QString();
 }
 
-bool QWebSocketExtension::acceptable(bool /*rsv1*/, bool /*rsv2*/, bool /*rsv3*/) const
+bool QWebSocketExtension::acceptable(bool rsv1, bool rsv2, bool rsv3) const
 {
+    Q_UNUSED(rsv1);
+    Q_UNUSED(rsv2);
+    Q_UNUSED(rsv3);
     return false;
 }
 
@@ -72,28 +76,28 @@ bool QWebSocketExtension::canCompress() const
     return false;
 }
 
-void QWebSocketExtension::setOptions(const QString &/*input*/)
+void QWebSocketExtension::setOptions(const QString &input)
 {
+    Q_UNUSED(input);
     return;
 }
 
-bool QWebSocketExtension::validate(const QString &/*input*/) const
+bool QWebSocketExtension::validate(const QString &input) const
 {
+    Q_UNUSED(input);
     return false;
 }
 
-bool QWebSocketExtension::negotiate(const QString &/*input*/, QString &/*output*/) const
+bool QWebSocketExtension::negotiate(const QString &input, QString &output) const
 {
+    Q_UNUSED(input);
+    Q_UNUSED(output);
     return false;
 }
 
 QString QWebSocketExtension::response() const
 {
     return QString();
-}
-
-void QWebSocketExtension::virtual_hook(int /*id*/, void */*data*/)
-{
 }
 
 QT_END_NAMESPACE

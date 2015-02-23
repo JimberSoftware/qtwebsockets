@@ -608,13 +608,12 @@ QString QWebSocket::extension() const
 void QWebSocket::setExtension(const QString &ext)
 {
     Q_D(QWebSocket);
-    if (state() != QAbstractSocket::UnconnectedState) {
-        qWarning() << "Can't set extension when not unconnected!";
-        Q_UNUSED(ext);
-        return;
-    }
-
-    d->setExtension(ext);
+    Q_UNUSED(ext);
+    if (state() == QAbstractSocket::UnconnectedState)
+        d->setExtension(ext);
+    else
+        qWarning() << "Can only set extension when unconnected";
+    return;
 }
 
 /*!

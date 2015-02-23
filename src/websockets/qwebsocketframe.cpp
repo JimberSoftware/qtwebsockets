@@ -521,7 +521,7 @@ void QWebSocketFrame::setError(QWebSocketProtocol::CloseCode code, const QString
  */
 bool QWebSocketFrame::checkValidity()
 {
-    // todo: should deplay this check for rvs fields when extension is enabled, now Autobahn WebSockets Testsuite 3.4 failed
+    // FIXME: RSV1 should be checked if the data is not compressed
     if (Q_UNLIKELY(m_rsv2 || m_rsv3)) {
         setError(QWebSocketProtocol::CloseCodeProtocolError, tr("Rsv field is non-zero"));
     } else if (Q_UNLIKELY(QWebSocketProtocol::isOpCodeReserved(m_opCode))) {

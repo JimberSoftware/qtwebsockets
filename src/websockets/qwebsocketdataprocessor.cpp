@@ -68,8 +68,6 @@
 
 QT_BEGIN_NAMESPACE
 
-static quint32 const cache_max_size = 16384; // todo!
-
 /*!
     \internal
  */
@@ -78,7 +76,7 @@ QWebSocketDataProcessor::QWebSocketDataProcessor(QObject *parent) :
     m_processingState(PS_READ_HEADER),
     m_isFinalFrame(false),
     m_isFragmented(false),
-    m_isExt(false),
+    m_isExtension(false),
     m_opCode(QWebSocketProtocol::OpCodeClose),
     m_opCodeBackup(QWebSocketProtocol::OpCodeClose),
     m_isControlFrame(false),
@@ -91,8 +89,8 @@ QWebSocketDataProcessor::QWebSocketDataProcessor(QObject *parent) :
     m_payloadLength(0),
     m_pConverterState(Q_NULLPTR),
     m_pTextCodec(QTextCodec::codecForName("UTF-8")),
-    m_exts(),
-    m_currentExt(Q_NULLPTR)
+    m_extensions(),
+    m_currentExtension(Q_NULLPTR)
 {
     clear();
 }
@@ -130,19 +128,11 @@ quint64 QWebSocketDataProcessor::maxFrameSize()
  */
 bool QWebSocketDataProcessor::compress(const QByteArray &input, QByteArray &output)
 {
-    for (const auto extension : m_exts) {
+    for (const auto extension : m_extensions) {
         if (extension->canCompress()) {
-            extension->serverJob(input, output);
+            extension->compress(input, output);
             if (extension->name() == QLatin1Literal("permessage-deflate")) {
-#if defined(QT_DEBUG)
-                QByteArray ba;
-                ba.resize(4);
-                ba[0] = 0x0;
-                ba[1] = 0x0;
-                ba[2] = 0xff;
-                ba[3] = 0xff;
-                Q_ASSERT(output.endsWith(ba));
-#endif
+                Q_ASSERT(output.endsWith(QByteArray("\0\0\xff\xff", 4)));
                 output.resize(output.size() - 4);
             }
             return true;
@@ -164,11 +154,11 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
             if (frame.isControlFrame()) {
                 isDone = processControlFrame(frame);
             } else {
-                if (!m_isExt) {
-                    for (int i = 0; i < m_exts.size(); ++i) {
-                        if (m_exts.at(i)->acceptable(frame.rsv1(), frame.rsv2(), frame.rsv3())) {
-                            m_currentExt = m_exts.at(i);
-                            m_isExt = true;
+                if (!m_isExtension) {
+                    for (const auto extension : qAsConst(m_extensions)) {
+                        if (extension->acceptable(frame.rsv1(), frame.rsv2(), frame.rsv3())) {
+                            m_currentExtension = extension;
+                            m_isExtension = true;
                             m_cache.clear();
                             m_cacheLength = 0;
                             m_opCodeBackup = frame.opCode();
@@ -177,10 +167,10 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                     }
                 }
 
-                //close the connection if we don't have a extension and one of
-                //the rsv values is true
-                if (Q_UNLIKELY(m_exts.isEmpty()) && (frame.rsv1() || frame.rsv2()
-                                                     || frame.rsv3())) {
+                // Close the connection if we don't have an extension when one
+                // of the rsv values is true
+                if (Q_UNLIKELY(m_extensions.isEmpty())
+                    && (frame.rsv1() || frame.rsv2() || frame.rsv3())) {
                     clear();
                     Q_EMIT errorEncountered(QWebSocketProtocol::CloseCodeProtocolError,
                                             tr("Received RSV bit, but no extensions to handle"
@@ -220,7 +210,7 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                     m_isFragmented = !frame.isFinalFrame();
                 }
 
-                if (!m_isExt) {
+                if (!m_isExtension) {
                     if (m_opCode == QWebSocketProtocol::OpCodeText) {
                         QString frameTxt = m_pTextCodec->toUnicode(frame.payload().constData(),
                                                                    frame.payload().size(),
@@ -246,42 +236,40 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                 }
 
                 if (frame.isFinalFrame()) {
-                    if (m_isExt && m_currentExt) {
-                        if (m_currentExt->name() == QLatin1Literal("permessage-deflate")) {
-                            // todo
-                            QByteArray ba;
-                            ba.resize(4);
-                            ba[0] = 0x0;
-                            ba[1] = 0x0;
-                            ba[2] = 0xff;
-                            ba[3] = 0xff;
+                    isDone = true;
+                    if (m_isExtension && m_currentExtension) {
+                        if (m_currentExtension->name() == QLatin1Literal("permessage-deflate")) {
+                            const QByteArray ba("\0\0\xff\xff", 4);
                             m_cache.append(ba);
 #ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
-//                            qDebug() << "decompress: before:" << m_cache.length() << ", data:" << m_cache.toHex();
+                            qDebug() << "Decompress: before:" << m_cache.length() << ", data:"
+                                     << m_cache.toHex();
 #endif
                             m_binaryMessage.clear();
-                            m_currentExt->clientJob(m_cache, m_binaryMessage);
+                            m_currentExtension->decompress(m_cache, m_binaryMessage);
 #ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
-//                            qDebug() << "decompress: after:" << out.length() << ", data:" << out.toHex();
+                            qDebug() << "Decompress: after:" << m_binaryMessage.length()
+                                     << ", data:" << m_binaryMessage.toHex();
 #endif
 
                             if (m_opCodeBackup == QWebSocketProtocol::OpCodeText) {
                                 m_textMessage = m_pTextCodec->toUnicode(m_binaryMessage.constData(),
                                                                         m_binaryMessage.size(),
                                                                         m_pConverterState);
-                                 bool failed = (m_pConverterState->invalidChars != 0)
-                                         || (m_pConverterState->remainingChars != 0);
-                                 if (Q_UNLIKELY(failed)) {
-                                     qDebug() << "failed 2";
-                                     clear();
-                                     Q_EMIT errorEncountered(QWebSocketProtocol::CloseCodeWrongDatatype,
-                                                             tr("Invalid UTF-8 code encountered."));
-                                     return;
-                                 } else {
+                                bool failed = (m_pConverterState->invalidChars != 0)
+                                        || (m_pConverterState->remainingChars != 0);
+                                if (Q_UNLIKELY(failed)) {
+                                    clear();
+                                    Q_EMIT errorEncountered(
+                                                QWebSocketProtocol::CloseCodeWrongDatatype,
+                                                tr("Invalid UTF-8 code encountered."));
+                                    return;
+                                } else {
                                     Q_EMIT textMessageReceived(m_textMessage);
                                  }
                             } else {
                                 Q_EMIT binaryMessageReceived(m_binaryMessage);
+                                clear();
                             }
                         }
                     } else {
@@ -289,8 +277,8 @@ void QWebSocketDataProcessor::process(QIODevice *pIoDevice)
                             Q_EMIT textMessageReceived(m_textMessage);
                         else
                             Q_EMIT binaryMessageReceived(m_binaryMessage);
+                        clear();
                     }
-                    clear();
                 }
             }
         } else {
@@ -309,7 +297,7 @@ void QWebSocketDataProcessor::clear()
     m_processingState = PS_READ_HEADER;
     m_isFinalFrame = false;
     m_isFragmented = false;
-    m_isExt = false;
+    m_isExtension = false;
     m_opCode = QWebSocketProtocol::OpCodeClose;
     m_opCodeBackup = QWebSocketProtocol::OpCodeClose;
     m_hasMask = false;
@@ -328,7 +316,7 @@ void QWebSocketDataProcessor::clear()
     if (!m_pConverterState)
         m_pConverterState = new QTextCodec::ConverterState(QTextCodec::ConvertInvalidToNull |
                                                            QTextCodec::IgnoreHeader);
-    m_currentExt = nullptr;
+    m_currentExtension = nullptr;
 }
 
 /*!
