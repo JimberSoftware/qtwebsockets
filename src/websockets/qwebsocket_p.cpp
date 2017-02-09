@@ -43,6 +43,7 @@
 #include "qwebsockethandshakerequest_p.h"
 #include "qwebsockethandshakeresponse_p.h"
 #include "qdefaultmaskgenerator_p.h"
+#include "qwebsocketextensionfactory.h"
 
 #include <QtCore/QUrl>
 #include <QtNetwork/QAuthenticator>
@@ -148,6 +149,15 @@ QWebSocketPrivate::QWebSocketPrivate(QTcpSocket *pTcpSocket, QWebSocketProtocol:
     m_defaultMaskGenerator(),
     m_handshakeState(NothingDoneState)
 {
+    if (m_mustMask) { //client
+        // todo: how to set the default for exts
+//        QStringList exts = QWebSocketExtensionFactory::keys();
+#ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
+//        qDebug() << "exts:" << exts;
+#endif
+
+        m_extension = QLatin1Literal("permessage-deflate; client_no_context_takeover; client_max_window_bits");
+    }
 }
 
 /*!
@@ -319,6 +329,7 @@ QWebSocket *QWebSocketPrivate::upgradeFrom(QTcpSocket *pTcpSocket,
         pWebSocket->d_func()->setResourceName(request.requestUrl().toString(QUrl::RemoveUserInfo));
         //a server should not send masked frames
         pWebSocket->d_func()->enableMasking(false);
+        pWebSocket->d_func()->loadExtensions(response.acceptedExtension());
     }
 
     return pWebSocket;
@@ -706,16 +717,19 @@ QString QWebSocketPrivate::closeReason() const
  */
 QByteArray QWebSocketPrivate::getFrameHeader(QWebSocketProtocol::OpCode opCode,
                                              quint64 payloadLength, quint32 maskingKey,
-                                             bool lastFrame)
+                                             bool lastFrame, bool compressed)
 {
     QByteArray header;
     bool ok = payloadLength <= 0x7FFFFFFFFFFFFFFFULL;
 
     if (Q_LIKELY(ok)) {
-        //FIN, RSV1-3, opcode (RSV-1, RSV-2 and RSV-3 are zero)
-        quint8 byte = static_cast<quint8>((opCode & 0x0F) | (lastFrame ? 0x80 : 0x00));
-        header.append(static_cast<char>(byte));
+        //FIN, RSV1-3, opcode (RSV-2 and RSV-3 are zero)
 
+        quint8 byte = 0x0;
+        byte = opCode & 0x0F;
+        byte |= lastFrame ? 0x80 : 0x00;
+        byte |= compressed ? 0x40 : 0x00; // RSV-1
+        header.append(static_cast<char>(byte));
         byte = 0x00;
         if (maskingKey != 0)
             byte |= 0x80;
@@ -760,11 +774,13 @@ qint64 QWebSocketPrivate::doWriteFrames(const QByteArray &data, bool isBinary)
     const QWebSocketProtocol::OpCode firstOpCode = isBinary ?
                 QWebSocketProtocol::OpCodeBinary : QWebSocketProtocol::OpCodeText;
 
-    int numFrames = data.size() / FRAME_SIZE_IN_BYTES;
-    QByteArray tmpData(data);
+    QByteArray tmpData = data;
     tmpData.detach();
+    bool compressed = m_dataProcessor.compress(data, tmpData);
+
+    int numFrames = tmpData.size() / FRAME_SIZE_IN_BYTES;
     char *payload = tmpData.data();
-    quint64 sizeLeft = quint64(data.size()) % FRAME_SIZE_IN_BYTES;
+    quint64 sizeLeft = quint64(tmpData.size()) % FRAME_SIZE_IN_BYTES;
     if (Q_LIKELY(sizeLeft))
         ++numFrames;
 
@@ -773,7 +789,7 @@ qint64 QWebSocketPrivate::doWriteFrames(const QByteArray &data, bool isBinary)
     if (Q_UNLIKELY(numFrames == 0))
         numFrames = 1;
     quint64 currentPosition = 0;
-    quint64 bytesLeft = data.size();
+    quint64 bytesLeft = tmpData.size();
 
     for (int i = 0; i < numFrames; ++i) {
         quint32 maskingKey = 0;
@@ -788,7 +804,7 @@ qint64 QWebSocketPrivate::doWriteFrames(const QByteArray &data, bool isBinary)
                                                                : QWebSocketProtocol::OpCodeContinue;
 
         //write header
-        m_pSocket->write(getFrameHeader(opcode, size, maskingKey, isLastFrame));
+        m_pSocket->write(getFrameHeader(opcode, size, maskingKey, isLastFrame, compressed));
 
         //write payload
         if (Q_LIKELY(size > 0)) {
@@ -809,9 +825,9 @@ qint64 QWebSocketPrivate::doWriteFrames(const QByteArray &data, bool isBinary)
         currentPosition += size;
         bytesLeft -= size;
     }
-    if (Q_UNLIKELY(payloadWritten != data.size())) {
+    if (Q_UNLIKELY(payloadWritten != tmpData.size())) {
         setErrorString(QWebSocket::tr("Bytes written %1 != %2.")
-                       .arg(payloadWritten).arg(data.size()));
+                       .arg(payloadWritten).arg(tmpData.size()));
         Q_EMIT q->error(QAbstractSocket::NetworkError);
     }
     return payloadWritten;
@@ -933,7 +949,6 @@ static bool parseStatusLine(const QByteArray &status, int *majorVersion, int *mi
     return ok && uint(*majorVersion) <= 9 && uint(* minorVersion) <= 9;
 }
 
-
 //called on the client for a server handshake response
 /*!
     \internal
@@ -991,10 +1006,13 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
         const QString upgrade = m_headers.value(QStringLiteral("upgrade"), QString());
         const QString connection = m_headers.value(QStringLiteral("connection"), QString());
 //        unused for the moment
-//        const QString extensions = m_headers.value(QStringLiteral("sec-websocket-extensions"),
-//                                                 QString());
-//        const QString protocol = m_headers.value(QStringLiteral("sec-websocket-protocol"),
-//                                               QString());
+
+        const QString extensions = m_headers.value(QStringLiteral("sec-websocket-extensions"), QString());
+        if (!extensions.isEmpty()) {
+            loadExtensions(extensions);
+        }
+
+//        const QString protocol = m_headers.value(QStringLiteral("sec-websocket-protocol"), QString());
         const QString version = m_headers.value(QStringLiteral("sec-websocket-version"), QString());
 
         bool ok = false;
@@ -1428,6 +1446,39 @@ bool QWebSocketPrivate::isValid() const
 {
     return (m_pSocket && m_pSocket->isValid() &&
             (m_socketState == QAbstractSocket::ConnectedState));
+}
+
+QString explodeExtensionRequest(const QString &input, QString &output) {
+    int idx = -1;
+    if ((idx = input.indexOf(';')) == -1)
+        return input;
+
+    output = input.right(input.length() - idx - 1);
+    return input.left(idx);
+}
+
+void QWebSocketPrivate::loadExtensions(const QString extensions)
+{
+    if (extensions.indexOf(',') != -1) {
+        // todo
+#ifdef QT_WEBSOCKETS_EXTENSION_DEBUG
+        qDebug() << "got multiple items for extensions, ignored for now";
+#endif
+    } else {
+        m_dataProcessor.m_exts.clear(); // todo: should clean those pointers first
+
+        QString part2;
+        QString part1 = explodeExtensionRequest(extensions, part2);
+        if (!part1.isEmpty()) {
+            QStringList exts = QWebSocketExtensionFactory::keys();
+            if (exts.contains(part1)) {
+                QWebSocketExtension *ext = QWebSocketExtensionFactory::create(part1);
+                ext->setEnabled(true);
+                ext->setOptions(part2);
+                m_dataProcessor.m_exts << ext;
+            }
+        }
+    }
 }
 
 QT_END_NAMESPACE

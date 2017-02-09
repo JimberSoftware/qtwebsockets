@@ -68,6 +68,8 @@
 #include "qwebsocketdataprocessor_p.h"
 #include "qdefaultmaskgenerator_p.h"
 
+#include "qwebsocketextensionplugin.h"
+
 QT_BEGIN_NAMESPACE
 
 class QWebSocketHandshakeRequest;
@@ -185,7 +187,7 @@ private:
     void releaseConnections(const QTcpSocket *pTcpSocket);
 
     QByteArray getFrameHeader(QWebSocketProtocol::OpCode opCode, quint64 payloadLength,
-                              quint32 maskingKey, bool lastFrame);
+                              quint32 maskingKey, bool lastFrame, bool compressed = false);
     QString calculateAcceptKey(const QByteArray &key) const;
     QString createHandShakeRequest(QString resourceName,
                                    QString host,
@@ -204,6 +206,7 @@ private:
     QByteArray generateKey() const;
     qint64 writeFrames(const QList<QByteArray> &frames) Q_REQUIRED_RESULT;
     qint64 writeFrame(const QByteArray &frame) Q_REQUIRED_RESULT;
+    void loadExtensions(const QString extensions);
 
     QTcpSocket *m_pSocket;
     QString m_errorString;

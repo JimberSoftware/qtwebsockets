@@ -59,6 +59,7 @@
 #include "qwebsockets_global.h"
 #include "qwebsocketprotocol.h"
 #include "qwebsocketprotocol_p.h"
+#include "qwebsocketextension.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -110,6 +111,7 @@ private:
     quint32 m_mask;
     QWebSocketProtocol::OpCode m_opCode;
     quint8 m_length;
+
     QByteArray m_payload;
 
     bool m_isFinalFrame;

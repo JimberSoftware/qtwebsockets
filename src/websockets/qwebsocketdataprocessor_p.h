@@ -57,6 +57,7 @@
 #include <QtCore/QTextCodec>
 #include "qwebsocketprotocol.h"
 #include "qwebsocketprotocol_p.h"
+#include "qwebsocketextension.h"
 
 QT_BEGIN_NAMESPACE
 
@@ -74,6 +75,7 @@ public:
 
     static quint64 maxMessageSize();
     static quint64 maxFrameSize();
+    bool compress(const QByteArray &input, QByteArray &output);
 
 Q_SIGNALS:
     void pingReceived(const QByteArray &data);
@@ -102,16 +104,25 @@ private:
 
     bool m_isFinalFrame;
     bool m_isFragmented;
+    bool m_isExt;
     QWebSocketProtocol::OpCode m_opCode;
+    QWebSocketProtocol::OpCode m_opCodeBackup;
     bool m_isControlFrame;
     bool m_hasMask;
     quint32 m_mask;
     QByteArray m_binaryMessage;
+    QByteArray m_cache;
+    quint32 m_cacheLength;
     QString m_textMessage;
     quint64 m_payloadLength;
     QTextCodec::ConverterState *m_pConverterState;
     QTextCodec *m_pTextCodec;
 
+public:
+    QList<QWebSocketExtension *> m_exts;
+    QWebSocketExtension *m_currentExt;
+
+private:
     bool processControlFrame(const QWebSocketFrame &frame);
 };
 

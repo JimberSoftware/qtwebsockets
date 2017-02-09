@@ -12,6 +12,9 @@ PUBLIC_HEADERS += \
     $$PWD/qwebsocket.h \
     $$PWD/qwebsocketserver.h \
     $$PWD/qwebsocketprotocol.h \
+    $$PWD/qwebsocketextension.h \
+    $$PWD/qwebsocketextensionfactory.h \
+    $$PWD/qwebsocketextensionplugin.h \
     $$PWD/qwebsocketcorsauthenticator.h \
     $$PWD/qmaskgenerator.h
 
@@ -35,6 +38,9 @@ SOURCES += \
     $$PWD/qwebsockethandshakerequest.cpp \
     $$PWD/qwebsockethandshakeresponse.cpp \
     $$PWD/qwebsocketdataprocessor.cpp \
+    $$PWD/qwebsocketextensionfactory.cpp \
+    $$PWD/qwebsocketextension.cpp \
+    $$PWD/qwebsocketextensionplugin.cpp \
     $$PWD/qwebsocketcorsauthenticator.cpp \
     $$PWD/qwebsocketframe.cpp \
     $$PWD/qmaskgenerator.cpp \
@@ -47,4 +53,10 @@ qtConfig(ssl) {
 
 HEADERS += $$PUBLIC_HEADERS $$PRIVATE_HEADERS
 
+MODULE_PLUGIN_TYPES = websocketextensions
+
 load(qt_module)
+
+# debug support
+DEFINES += QT_WEBSOCKETS_ENABLE_DEBUG
+DEFINES += QT_WEBSOCKETS_EXTENSION_DEBUG

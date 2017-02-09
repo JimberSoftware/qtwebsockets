@@ -469,8 +469,8 @@ QWebSocketFrame QWebSocketFrame::readFrame(QIODevice *pIoDevice)
                     if (Q_UNLIKELY(frame.m_payload.length() != int(payloadLength))) {
                         //some error occurred; refer to the Qt documentation of QIODevice::read()
                         frame.setError(QWebSocketProtocol::CloseCodeAbnormalDisconnection,
-                                       tr("Some serious error occurred " \
-                                                   "while reading from the network."));
+                                       tr("Some serious error occurred "
+                                          "while reading from the network."));
                         processingState = PS_DISPATCH_RESULT;
                     } else {
                         if (hasMask)
@@ -521,7 +521,8 @@ void QWebSocketFrame::setError(QWebSocketProtocol::CloseCode code, const QString
  */
 bool QWebSocketFrame::checkValidity()
 {
-    if (Q_UNLIKELY(m_rsv1 || m_rsv2 || m_rsv3)) {
+    // todo: should deplay this check for rvs fields when extension is enabled, now Autobahn WebSockets Testsuite 3.4 failed
+    if (Q_UNLIKELY(m_rsv2 || m_rsv3)) {
         setError(QWebSocketProtocol::CloseCodeProtocolError, tr("Rsv field is non-zero"));
     } else if (Q_UNLIKELY(QWebSocketProtocol::isOpCodeReserved(m_opCode))) {
         setError(QWebSocketProtocol::CloseCodeProtocolError, tr("Used reserved opcode"));
