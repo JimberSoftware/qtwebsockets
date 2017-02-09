@@ -599,6 +599,21 @@ QString QWebSocket::closeReason() const
     return d->closeReason();
 }
 
+QString QWebSocket::extension() const
+{
+    Q_D(const QWebSocket);
+    return d->extension();
+}
+
+void QWebSocket::setExtension(const QString &ext)
+{
+    Q_D(QWebSocket);
+    if (state() == QAbstractSocket::UnconnectedState)
+        d->setExtension(ext);
+    else
+        qWarning() << "Can only set extension when unconnected";
+}
+
 /*!
     \brief Returns the current state of the socket.
  */

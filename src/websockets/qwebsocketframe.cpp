@@ -521,7 +521,8 @@ void QWebSocketFrame::setError(QWebSocketProtocol::CloseCode code, const QString
  */
 bool QWebSocketFrame::checkValidity()
 {
-    if (Q_UNLIKELY(m_rsv1 || m_rsv2 || m_rsv3)) {
+    // FIXME: RSV1 should be checked if the data is not compressed
+    if (Q_UNLIKELY(m_rsv2 || m_rsv3)) {
         setError(QWebSocketProtocol::CloseCodeProtocolError, tr("Rsv field is non-zero"));
     } else if (Q_UNLIKELY(QWebSocketProtocol::isOpCodeReserved(m_opCode))) {
         setError(QWebSocketProtocol::CloseCodeProtocolError, tr("Used reserved opcode"));

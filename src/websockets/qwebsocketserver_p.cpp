@@ -48,6 +48,7 @@
 #include "qwebsocket.h"
 #include "qwebsocket_p.h"
 #include "qwebsocketcorsauthenticator.h"
+#include "qwebsocketextensionfactory.h"
 
 #include <QtNetwork/QTcpServer>
 #include <QtNetwork/QTcpSocket>
@@ -324,8 +325,8 @@ QStringList QWebSocketServerPrivate::supportedProtocols() const
  */
 QStringList QWebSocketServerPrivate::supportedExtensions() const
 {
-    QStringList supportedExtensions;
-    return supportedExtensions;	//no extensions are currently supported
+    static const auto keys = QWebSocketExtensionFactory::keys();
+    return keys;
 }
 
 /*!

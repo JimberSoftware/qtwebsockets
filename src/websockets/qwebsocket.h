@@ -104,6 +104,9 @@ public:
     QWebSocketProtocol::CloseCode closeCode() const;
     QString closeReason() const;
 
+    QString extension() const;
+    void setExtension(const QString &ext);
+
     qint64 sendTextMessage(const QString &message);
     qint64 sendBinaryMessage(const QByteArray &data);
 
