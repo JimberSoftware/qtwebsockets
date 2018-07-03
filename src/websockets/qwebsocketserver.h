@@ -65,8 +65,6 @@ class Q_WEBSOCKETS_EXPORT QWebSocketServer : public QObject
     Q_DISABLE_COPY(QWebSocketServer)
     Q_DECLARE_PRIVATE(QWebSocketServer)
 
-    Q_ENUMS(SslMode)
-
 public:
     enum SslMode {
 #ifndef QT_NO_SSL
@@ -74,9 +72,10 @@ public:
 #endif
         NonSecureMode = 1
     };
+    Q_ENUM(SslMode)
 
     explicit QWebSocketServer(const QString &serverName, SslMode secureMode,
-                              QObject *parent = Q_NULLPTR);
+                              QObject *parent = nullptr);
     virtual ~QWebSocketServer();
 
     bool listen(const QHostAddress &address = QHostAddress::Any, quint16 port = 0);

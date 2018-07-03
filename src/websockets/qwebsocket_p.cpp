@@ -81,7 +81,7 @@ QWebSocketConfiguration::QWebSocketConfiguration() :
 #ifndef QT_NO_NETWORKPROXY
     m_proxy(QNetworkProxy::DefaultProxy),
 #endif
-    m_pSocket(Q_NULLPTR)
+    m_pSocket(nullptr)
 {
 }
 
@@ -92,7 +92,7 @@ QWebSocketPrivate::QWebSocketPrivate(const QString &origin, QWebSocketProtocol::
                                      QWebSocket *pWebSocket) :
     QObjectPrivate(),
     q_ptr(pWebSocket),
-    m_pSocket(Q_NULLPTR),
+    m_pSocket(nullptr),
     m_errorString(),
     m_version(version),
     m_resourceName(),
@@ -382,7 +382,7 @@ void QWebSocketPrivate::open(const QNetworkRequest &request, bool mask)
     if (m_pSocket) {
         releaseConnections(m_pSocket);
         m_pSocket->deleteLater();
-        m_pSocket = Q_NULLPTR;
+        m_pSocket = nullptr;
     }
     //if (m_url != url)
     if (Q_LIKELY(!m_pSocket)) {
@@ -569,11 +569,9 @@ void QWebSocketPrivate::makeConnections(const QTcpSocket *pTcpSocket)
 
     if (Q_LIKELY(pTcpSocket)) {
         //pass through signals
-        typedef void (QAbstractSocket:: *ASErrorSignal)(QAbstractSocket::SocketError);
-        typedef void (QWebSocket:: *WSErrorSignal)(QAbstractSocket::SocketError);
         QObject::connect(pTcpSocket,
-                         static_cast<ASErrorSignal>(&QAbstractSocket::error),
-                         q, static_cast<WSErrorSignal>(&QWebSocket::error));
+                         QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::error),
+                         q, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error));
 #ifndef QT_NO_NETWORKPROXY
         QObject::connect(pTcpSocket, &QAbstractSocket::proxyAuthenticationRequired, q,
                          &QWebSocket::proxyAuthenticationRequired);
@@ -581,8 +579,6 @@ void QWebSocketPrivate::makeConnections(const QTcpSocket *pTcpSocket)
         QObject::connect(pTcpSocket, &QAbstractSocket::readChannelFinished, q,
                          &QWebSocket::readChannelFinished);
         QObject::connect(pTcpSocket, &QAbstractSocket::aboutToClose, q, &QWebSocket::aboutToClose);
-        QObject::connect(pTcpSocket, &QAbstractSocket::bytesWritten, q, &QWebSocket::bytesWritten);
-
 
         QObjectPrivate::connect(pTcpSocket, &QObject::destroyed,
                                 this, &QWebSocketPrivate::socketDestroyed);
@@ -601,9 +597,11 @@ void QWebSocketPrivate::makeConnections(const QTcpSocket *pTcpSocket)
                              &QWebSocket::preSharedKeyAuthenticationRequired);
             QObject::connect(sslSocket, &QSslSocket::encryptedBytesWritten, q,
                              &QWebSocket::bytesWritten);
-            typedef void (QSslSocket:: *sslErrorSignalType)(const QList<QSslError> &);
+            QObjectPrivate::connect(sslSocket,
+                                    QOverload<const QList<QSslError>&>::of(&QSslSocket::sslErrors),
+                                    this, &QWebSocketPrivate::_q_updateSslConfiguration);
             QObject::connect(sslSocket,
-                             static_cast<sslErrorSignalType>(&QSslSocket::sslErrors),
+                             QOverload<const QList<QSslError>&>::of(&QSslSocket::sslErrors),
                              q, &QWebSocket::sslErrors);
             QObjectPrivate::connect(sslSocket, &QSslSocket::encrypted,
                                     this, &QWebSocketPrivate::_q_updateSslConfiguration);
@@ -639,7 +637,7 @@ void QWebSocketPrivate::makeConnections(const QTcpSocket *pTcpSocket)
 void QWebSocketPrivate::releaseConnections(const QTcpSocket *pTcpSocket)
 {
     if (Q_LIKELY(pTcpSocket))
-        pTcpSocket->disconnect(pTcpSocket);
+        pTcpSocket->disconnect();
     m_dataProcessor.disconnect();
 }
 
@@ -967,7 +965,7 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
     case NothingDoneState:
         m_headers.clear();
         m_handshakeState = ReadingStatusState;
-        // no break
+        Q_FALLTHROUGH();
     case ReadingStatusState:
         if (!pSocket->canReadLine())
             return;
@@ -977,18 +975,33 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
             break;
         }
         m_handshakeState = ReadingHeaderState;
-        // no break
-    case ReadingHeaderState:
+        Q_FALLTHROUGH();
+    case ReadingHeaderState: {
+        // TODO: this should really use the existing code from QHttpNetworkReplyPrivate::parseHeader
+        auto lastHeader = m_headers.end();
         while (pSocket->canReadLine()) {
             QString headerLine = readLine(pSocket);
-            const QStringList headerField = headerLine.split(QStringLiteral(": "),
-                                                             QString::SkipEmptyParts);
-            if (headerField.size() == 2) {
-                m_headers.insertMulti(headerField[0].toLower(), headerField[1]);
-            }
-            if (headerField.isEmpty()) {
+
+            if (headerLine.isEmpty()) {
+                // end of headers
                 m_handshakeState = ParsingHeaderState;
                 break;
+            } else if (headerLine.startsWith(QLatin1Char(' ')) || headerLine.startsWith(QLatin1Char('\t'))) {
+                // continuation line -- add this to the last header field
+                if (Q_UNLIKELY(lastHeader == m_headers.end())) {
+                    errorDescription = QWebSocket::tr("Malformed header in response: %1.").arg(headerLine);
+                    break;
+                }
+                lastHeader.value().append(QLatin1Char(' '));
+                lastHeader.value().append(headerLine.trimmed());
+            } else {
+                int colonPos = headerLine.indexOf(QLatin1Char(':'));
+                if (Q_UNLIKELY(colonPos <= 0)) {
+                    errorDescription = QWebSocket::tr("Malformed header in response: %1.").arg(headerLine);
+                    break;
+                }
+                lastHeader = m_headers.insertMulti(headerLine.left(colonPos).trimmed().toLower(),
+                                                   headerLine.mid(colonPos + 1).trimmed());
             }
         }
 
@@ -999,7 +1012,8 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
             }
             return;
         }
-        // no break
+        Q_FALLTHROUGH();
+    }
     case ParsingHeaderState: {
         const QString acceptKey = m_headers.value(QStringLiteral("sec-websocket-accept"), QString());
         const QString upgrade = m_headers.value(QStringLiteral("upgrade"), QString());
@@ -1027,7 +1041,7 @@ void QWebSocketPrivate::processHandshake(QTcpSocket *pSocket)
                 if (!ok)
                     errorDescription =
                       QWebSocket::tr("Accept-Key received from server %1 does not match the client key %2.")
-                            .arg(acceptKey).arg(accept);
+                            .arg(acceptKey, accept);
             } else {
                 errorDescription =
                     QWebSocket::tr("QWebSocketPrivate::processHandshake: Invalid statusline in response: %1.")
@@ -1153,7 +1167,7 @@ void QWebSocketPrivate::socketDestroyed(QObject *socket)
 {
     Q_ASSERT(m_pSocket);
     if (m_pSocket == socket)
-        m_pSocket = Q_NULLPTR;
+        m_pSocket = nullptr;
 }
 
 /*!
@@ -1161,7 +1175,8 @@ void QWebSocketPrivate::socketDestroyed(QObject *socket)
  */
 void QWebSocketPrivate::processData()
 {
-    Q_ASSERT(m_pSocket);
+    if (!m_pSocket) // disconnected with data still in-bound
+        return;
     while (m_pSocket->bytesAvailable()) {
         if (state() == QAbstractSocket::ConnectingState) {
             if (!m_pSocket->canReadLine())

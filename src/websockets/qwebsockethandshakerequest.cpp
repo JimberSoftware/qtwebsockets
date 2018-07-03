@@ -251,14 +251,26 @@ void QWebSocketHandshakeRequest::readHandshake(QTextStream &textStream, int maxH
         return;
     }
     m_headers.clear();
+    // TODO: this should really use the existing code from QHttpNetworkReplyPrivate::parseHeader
+    auto lastHeader = m_headers.end();
     while (!headerLine.isEmpty()) {
-        const QStringList headerField = headerLine.split(QStringLiteral(": "),
-                                                         QString::SkipEmptyParts);
-        if (Q_UNLIKELY(headerField.length() < 2)) {
-            clear();
-            return;
+        if (headerLine.startsWith(QLatin1Char(' ')) || headerLine.startsWith(QLatin1Char('\t'))) {
+            // continuation line -- add this to the last header field
+            if (Q_UNLIKELY(lastHeader == m_headers.end())) {
+                clear();
+                return;
+            }
+            lastHeader.value().append(QLatin1Char(' '));
+            lastHeader.value().append(headerLine.trimmed());
+        } else {
+            int colonPos = headerLine.indexOf(QLatin1Char(':'));
+            if (Q_UNLIKELY(colonPos <= 0)) {
+               clear();
+               return;
+            }
+            lastHeader = m_headers.insertMulti(headerLine.left(colonPos).trimmed().toLower(),
+                                               headerLine.mid(colonPos + 1).trimmed());
         }
-        m_headers.insertMulti(headerField.at(0).toLower(), headerField.at(1));
         if (m_headers.size() > maxHeaders) {
             clear();
             return;
@@ -318,17 +330,17 @@ void QWebSocketHandshakeRequest::readHandshake(QTextStream &textStream, int maxH
     //optional headers
     m_origin = m_headers.value(QStringLiteral("origin"), QString());
     const QStringList protocolLines = m_headers.values(QStringLiteral("sec-websocket-protocol"));
-    for (QStringList::const_iterator pl = protocolLines.begin(); pl != protocolLines.end(); ++pl) {
-        QStringList protocols = (*pl).split(QStringLiteral(","), QString::SkipEmptyParts);
-        for (QStringList::const_iterator p = protocols.begin(); p != protocols.end(); ++p)
-            m_protocols << (*p).trimmed();
+    for (const QString& pl : protocolLines) {
+        const QStringList protocols = pl.split(QStringLiteral(","), QString::SkipEmptyParts);
+        for (const QString& p : protocols)
+            m_protocols << p.trimmed();
     }
+
     const QStringList extensionLines = m_headers.values(QStringLiteral("sec-websocket-extensions"));
-    for (QStringList::const_iterator el = extensionLines.begin();
-         el != extensionLines.end(); ++el) {
-        QStringList extensions = (*el).split(QStringLiteral(","), QString::SkipEmptyParts);
-        for (QStringList::const_iterator e = extensions.begin(); e != extensions.end(); ++e)
-            m_extensions << (*e).trimmed();
+    for (const QString& el : extensionLines) {
+        const QStringList extensions = el.split(QStringLiteral(","), QString::SkipEmptyParts);
+        for (const QString& e : extensions)
+            m_extensions << e.trimmed();
     }
 
     //TODO: authentication field

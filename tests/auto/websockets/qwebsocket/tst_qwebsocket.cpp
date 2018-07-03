@@ -39,7 +39,7 @@ class EchoServer : public QObject
 {
     Q_OBJECT
 public:
-    explicit EchoServer(QObject *parent = Q_NULLPTR);
+    explicit EchoServer(QObject *parent = nullptr);
     ~EchoServer();
 
     QHostAddress hostAddress() const { return m_pWebSocketServer->serverAddress(); }
@@ -659,7 +659,7 @@ void tst_QWebSocket::tst_moveToThread()
 
     EchoServer echoServer;
 
-    QThread* thread = new QThread;
+    QThread* thread = new QThread(this);
     thread->start();
 
     WebSocket* socket = new WebSocket;
@@ -696,7 +696,7 @@ void tst_QWebSocket::tst_moveToThread()
 
     socket->deleteLater();
     thread->quit();
-    thread->deleteLater();
+    thread->wait();
 }
 
 void tst_QWebSocket::tst_moveToThreadNoWarning()

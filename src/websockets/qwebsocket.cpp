@@ -63,8 +63,8 @@
     In that case, non-secure WebSocket connections fail. The best way to mitigate against
     this problem is to use WebSocket over a secure connection.
 
-    \warning To generate masks, this implementation of WebSockets uses the cryptographically
-    insecure qrand() function.
+    \warning To generate masks, this implementation of WebSockets uses the reasonably
+    secure QRandomGenerator::global()->generate() function.
     For more information about the importance of good masking,
     see \l {"Talking to Yourself for Fun and Profit" by Lin-Shung Huang et al}.
     The best measure against attacks mentioned in the document above,
@@ -699,7 +699,7 @@ void QWebSocket::setProxy(const QNetworkProxy &networkProxy)
 
 /*!
     Sets the generator to use for creating masks to \a maskGenerator.
-    The default QWebSocket generator can be reset by supplying a \e Q_NULLPTR.
+    The default QWebSocket generator can be reset by supplying a \e nullptr.
     The mask generator can be changed at any time, even while the connection is open.
  */
 void QWebSocket::setMaskGenerator(const QMaskGenerator *maskGenerator)
